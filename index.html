@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>宿泊費精算</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+/* Layout: cozy farm-RPG menu. Grass field background; every block is a parchment panel in a stepped wooden frame.
+   Order: wooden title sign → villagers standing on grass → stay calendar → price "item tooltip" → member list → wooden dock. Single deliberate look (no dark variant). */
+:root {
+  --grass: #78b34a;
+  --grass-d: #5f9a39;
+  --ink: #4a2511;          /* text: dark brown */
+  --ink2: #8a5a35;
+  --paper: #fbdc9c;        /* parchment */
+  --paper-l: #fff0c8;
+  --paper-d: #e9bd72;
+  --wood: #d98236;         /* frame */
+  --wood-l: #f2a957;
+  --wood-d: #7c3a12;
+  --line: #5b2a0e;
+  --n1: #3e7fd8;           /* 前泊 */
+  --n2: #e8792b;           /* 後泊 */
+  --ok: #4e9a2f;
+  --red: #c9392f;
+  --gold: #f4c430;
+  --font: "DotGothic16", "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100vh; color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.45;
+  background-color: var(--grass);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cg fill='%235f9a39'%3E%3Crect x='2' y='3' width='1' height='2'/%3E%3Crect x='3' y='4' width='1' height='1'/%3E%3Crect x='10' y='1' width='1' height='2'/%3E%3Crect x='11' y='2' width='1' height='1'/%3E%3Crect x='6' y='10' width='1' height='2'/%3E%3Crect x='7' y='11' width='1' height='1'/%3E%3Crect x='13' y='12' width='1' height='2'/%3E%3C/g%3E%3Cg fill='%2394c862'%3E%3Crect x='5' y='6' width='1' height='1'/%3E%3Crect x='14' y='7' width='1' height='1'/%3E%3Crect x='1' y='13' width='1' height='1'/%3E%3Crect x='9' y='14' width='1' height='1'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 48px 48px; image-rendering: pixelated; }
+.wrap { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px;
+  padding-block: max(24px, env(safe-area-inset-top, 0px)) calc(110px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.px { display: block; image-rendering: pixelated; shape-rendering: crispEdges; }
+
+/* stepped pixel corners */
+.panel, .sign, .dock, .toast, .btn, .slot, .tg, .ava, .lock {
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px),
+    0 4px, 2px 4px, 2px 2px, 4px 2px);
+}
+/* parchment in a wooden frame */
+.panel { position: relative; background: var(--paper); border: 3px solid var(--line);
+  box-shadow: inset 0 0 0 4px var(--wood), inset 0 0 0 5px var(--wood-l), inset 0 0 0 7px var(--wood-d), inset 0 -10px 0 7px var(--paper-d); padding: 16px; }
+.panel h2 { margin: 0 0 10px; font-size: 18px; font-weight: 400; text-align: center; letter-spacing: .04em; }
+
+/* title sign */
+.sign { background: var(--wood); border: 3px solid var(--line); padding: 14px 16px 16px; text-align: center; color: var(--paper-l);
+  box-shadow: inset 0 3px 0 var(--wood-l), inset 0 -5px 0 var(--wood-d);
+  background-image: repeating-linear-gradient(180deg, transparent 0 9px, rgba(124,58,18,.35) 9px 11px); }
+.sign p { margin: 0; font-size: 13px; color: #ffe1ab; text-shadow: 2px 2px 0 var(--wood-d); }
+h1 { margin: 2px 0 0; font-size: clamp(30px, 9vw, 40px); font-weight: 400; letter-spacing: .06em; line-height: 1.15; text-shadow: 3px 3px 0 var(--line); }
+
+/* villagers */
+.lineup { padding: 14px 10px 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: end; gap: 2px; overflow: hidden; }
+.lineup::after { content: ""; position: absolute; left: 7px; right: 7px; bottom: 7px; height: 22px; background: var(--grass);
+  background-image: linear-gradient(180deg, #94c862 0 3px, transparent 3px), repeating-linear-gradient(90deg, var(--grass) 0 6px, var(--grass-d) 6px 8px); }
+.fig { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; min-width: 0; padding-bottom: 10px; transition: opacity .3s, filter .3s; }
+.fig .px { width: 100%; max-width: 48px; height: auto; aspect-ratio: 4 / 5; }
+.fig span { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--paper-l);
+  border: 2px solid var(--line); padding: 0 4px; line-height: 1.3; }
+.fig.off { filter: grayscale(.9) brightness(.9); opacity: .55; }
+.fig .nights { display: flex; gap: 2px; height: 6px; }
+.fig .nights i { width: 9px; height: 6px; background: var(--paper-d); border: 1px solid var(--line); }
+.fig .nights i.on1 { background: var(--n1); } .fig .nights i.on2 { background: var(--n2); }
+.hop { animation: hop .4s steps(4); }
+@keyframes hop { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: no-preference) {
+  .fig:not(.off) .px { animation: idle 1.6s steps(1) infinite; }
+  .fig:nth-child(2n) .px { animation-delay: -.8s; }
+}
+@keyframes idle { 50% { transform: translateY(-2px); } }
+
+/* calendar */
+.cal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 2px solid var(--line); background: var(--paper-l); }
+.cal .dow { text-align: center; font-size: 14px; border-bottom: 2px solid var(--line); padding: 2px 0; background: var(--paper); }
+.cal .dow + .dow, .cal .cell + .cell { border-left: 2px solid var(--line); }
+.cal .cell { min-height: 96px; padding: 4px 6px 6px; display: grid; align-content: start; gap: 4px; }
+.cal .cell b { font-weight: 400; font-size: 18px; line-height: 1; }
+.cal .cell small { font-size: 11px; color: var(--ink2); }
+.cal .who { display: flex; flex-wrap: wrap; gap: 1px; }
+.cal .who .px { width: 22px; height: 27.5px; }
+.cal .cell.c1 { box-shadow: inset 0 -4px 0 var(--n1); } .cal .cell.c2 { box-shadow: inset 0 -4px 0 var(--n2); }
+.cal .flag .ic { width: 18px; height: 18px; flex: none; }
+.cal .flag { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink2); }
+.cal .empty { font-size: 12px; color: var(--ink2); }
+
+/* item-tooltip style price card */
+.tip h2 { text-align: left; font-size: 22px; margin: 0; padding-bottom: 8px; border-bottom: 2px solid var(--wood-d); }
+.tip .desc { margin: 8px 0 10px; font-size: 13px; color: var(--ink2); }
+.slot { display: flex; align-items: baseline; gap: 6px; background: var(--paper-l); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 var(--paper-d); padding: 6px 10px; }
+.slot span { font-size: 26px; color: var(--ink2); }
+.slot input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); padding: 0;
+  font-family: var(--font); font-size: clamp(30px, 9vw, 40px); font-variant-numeric: tabular-nums; }
+.slot input::placeholder { color: var(--paper-d); }
+.slot:focus-within { border-color: var(--n1); }
+.stats { margin-top: 12px; display: grid; gap: 4px; }
+.stat { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.stat .ic { width: 18px; height: 18px; flex: none; }
+.stat small { font-size: 15px; flex: 1; }
+.stat b { font-weight: 400; font-size: 17px; }
+.stat b u { text-decoration: none; font-size: 13px; color: var(--ink2); margin-left: 2px; }
+.stat.per { margin-top: 4px; padding-top: 6px; border-top: 2px dashed var(--paper-d); }
+.stat.per b { font-size: 22px; color: var(--wood-d); }
+
+/* members */
+.foot { margin: 8px 2px 0; font-size: 12px; color: var(--ink2); line-height: 1.5; }
+.row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 10px 2px; }
+.row + .row { border-top: 2px dashed var(--paper-d); }
+.ava { width: 50px; height: 50px; background: var(--paper-l); border: 2px solid var(--line); box-shadow: inset 0 -12px 0 #a9d27a; display: grid; place-items: end center; overflow: hidden; transition: filter .3s; }
+.ava .px { width: 36px; height: 45px; margin-bottom: -2px; }
+.row.off .ava { filter: grayscale(.9); }
+.who { display: grid; gap: 0; min-width: 0; }
+.who input { font-family: var(--font); font-size: 18px; color: var(--ink); background: transparent; border: 0; border-bottom: 2px solid transparent; outline: none; padding: 0; width: 100%; min-width: 0; }
+.who input:focus { background: var(--paper-l); border-bottom-color: var(--n1); }
+.who small { font-size: 12px; color: var(--ink2); }
+.pay { text-align: right; font-size: 20px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.pay .ic { width: 16px; height: 16px; }
+.row.off .pay { color: var(--ink2); }
+.pills { grid-column: 1 / -1; display: flex; gap: 8px; }
+.tg { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px;
+  background: var(--paper-d); border: 2px solid var(--line); color: var(--ink2); font-size: 15px; cursor: pointer; user-select: none;
+  box-shadow: inset 0 -4px 0 rgba(91,42,14,.25), inset 0 2px 0 rgba(255,255,255,.35); }
+.tg:active { transform: translateY(2px); box-shadow: inset 0 -2px 0 rgba(91,42,14,.25); }
+.tg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.tg .tick { width: 14px; height: 14px; border: 2px solid currentColor; background: var(--paper-l); display: grid; place-items: center; }
+.tg:has(input:checked) { color: #fff; text-shadow: 1px 1px 0 var(--line); }
+.tg.n1:has(input:checked) { background: var(--n1); } .tg.n2:has(input:checked) { background: var(--n2); }
+.tg:has(input:checked) .tick { border-color: var(--line); background: #fff; }
+.tg:has(input:checked) .tick::after { content: ""; width: 6px; height: 6px; background: var(--ok); }
+.tg:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 1px; }
+.tg em { font-style: normal; font-size: 12px; opacity: .85; }
+.tg:has(input:disabled), .tg:has(input:disabled) input { cursor: not-allowed; }
+.tg:has(input:disabled):active { transform: none; }
+.row.locked .tg { box-shadow: inset 0 -4px 0 rgba(91,42,14,.25); filter: saturate(.8); }
+.lock { flex: 0 0 auto; min-width: 78px; height: 38px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px;
+  font-family: var(--font); font-size: 14px; color: var(--ink); background: var(--paper-l); border: 2px solid var(--line); cursor: pointer;
+  box-shadow: inset 0 -4px 0 var(--paper-d); }
+.lock .ic { width: 16px; height: 16px; }
+.lock:active { transform: translateY(2px); }
+.lock.on { background: var(--gold); box-shadow: inset 0 -4px 0 #c98a12, inset 0 2px 0 #fff1a0; }
+.lock.arm { background: #e9a08f; color: #6a1710; box-shadow: inset 0 -4px 0 #c96a58; }
+.lock:focus-visible { outline: 3px solid var(--gold); outline-offset: 1px; }
+.who small b { font-weight: 400; padding: 0 4px; border: 1px solid var(--line); margin-right: 4px; }
+.who small b.on { background: var(--gold); } .who small b.off { background: var(--paper-l); color: var(--ink2); border-style: dashed; }
+.fig.locked span { background: var(--gold); }
+.cal .who .px.t { opacity: .45; }
+.cal-legend { margin: 8px 0 0; font-size: 12px; color: var(--ink2); text-align: center; }
+.sumrow { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 0; margin-top: 4px; border-top: 3px solid var(--wood-d); }
+.sumrow span { font-size: 15px; }
+.sumrow b { font-weight: 400; font-size: 22px; }
+
+/* buttons */
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font-family: var(--font); font-size: 18px; color: var(--ink);
+  background: var(--wood-l); border: 3px solid var(--line); height: 52px; cursor: pointer;
+  box-shadow: inset 0 3px 0 #ffd08a, inset 0 -5px 0 var(--wood); }
+.btn:active { transform: translateY(2px); box-shadow: inset 0 3px 0 #ffd08a, inset 0 -2px 0 var(--wood); }
+.btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.btn.danger { background: #e9a08f; color: #6a1710; box-shadow: inset 0 3px 0 #f8c6ba, inset 0 -5px 0 #c96a58; }
+.btn.plain { background: var(--paper-l); box-shadow: inset 0 -5px 0 var(--paper-d); }
+.btn .ic { width: 20px; height: 20px; }
+.actions { display: grid; gap: 8px; }
+.confirm-msg { text-align: center; font-size: 14px; margin: 0 0 10px; }
+.confirm .actions { grid-template-columns: 1fr 1fr; }
+
+.dock { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: min(560px, calc(100% - 32px)); padding: 6px; background: var(--wood); border: 3px solid var(--line); box-shadow: inset 0 3px 0 var(--wood-l), inset 0 -4px 0 var(--wood-d); }
+.toast { position: fixed; z-index: 6; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 8px); opacity: 0;
+  background: #f3b563; border: 3px solid var(--line); box-shadow: inset 0 0 0 2px #ffd08a, inset 0 -4px 0 2px #d98236; color: var(--ink);
+  font-size: 16px; padding: 8px 18px 10px; pointer-events: none; max-width: calc(100% - 32px); text-align: center; white-space: nowrap;
+  transition: opacity .2s steps(3), transform .2s steps(3); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+textarea#copybox { width: 100%; min-height: 10em; font: 14px/1.5 var(--font); border: 3px solid var(--line); padding: 12px 14px; background: var(--paper-l); color: var(--ink); outline: none; }
+
+.sync { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: #fff; text-shadow: 1px 1px 0 var(--line); }
+.sync::before { content: ""; width: 8px; height: 8px; background: var(--paper-d); border: 2px solid var(--line); }
+.sync[data-state="ok"]::before { background: #8ef05a; }
+.sync[data-state="saving"]::before { background: var(--gold); }
+.sync[data-state="error"]::before { background: var(--red); }
+[hidden] { display: none !important; }
+@media (max-width: 380px) { .cal .cell { min-height: 80px; } .cal .who .px { width: 18px; height: 22.5px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="sign">
+    <p>11月6日〜8日 · 7名の旅</p>
+    <h1>宿泊費精算</h1>
+  </header>
+
+  <section class="panel lineup" id="lineup" aria-label="メンバー一覧"></section>
+
+  <section class="panel">
+    <h2>11月 宿泊カレンダー</h2>
+    <div class="cal">
+      <div class="dow">6 金</div><div class="dow">7 土</div><div class="dow">8 日</div>
+      <div class="cell c1"><small>前泊</small><div class="who" id="cal1"></div></div>
+      <div class="cell c2"><small>後泊</small><div class="who" id="cal2"></div></div>
+      <div class="cell"><small>チェックアウト</small><div class="flag"><span data-icon="flag" class="ic"></span>おつかれさま</div></div>
+    </div>
+    <p class="cal-legend">うすい人＝まだ仮（確定していない）</p>
+  </section>
+
+  <section class="panel tip">
+    <h2>2泊分の宿泊費</h2>
+    <p class="desc">合計金額を入れると、泊まる日数に合わせて自動で割り勘します。1人1泊＝1口。</p>
+    <label class="slot" for="total"><span>¥</span><input id="total" inputmode="numeric" autocomplete="off" placeholder="0"></label>
+    <div class="stats">
+      <div class="stat"><span class="ic" data-icon="moon1"></span><small>前泊</small><b id="c1">0<u>名</u></b></div>
+      <div class="stat"><span class="ic" data-icon="moon2"></span><small>後泊</small><b id="c2">0<u>名</u></b></div>
+      <div class="stat"><span class="ic" data-icon="bag"></span><small>合計</small><b id="shares">0<u>口</u></b></div>
+      <div class="stat"><span class="ic" data-icon="lockOn"></span><small>確定済み</small><b id="locked">0<u>/7名</u></b></div>
+      <div class="stat per"><span class="ic" data-icon="coin"></span><small>1口あたり</small><b id="per">—</b></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>メンバー</h2>
+    <div id="list"></div>
+    <div class="sumrow"><span>支払い合計 <span id="diff"></span></span><b id="sum">¥0</b></div>
+    <p class="foot">だれの予定でも変えて試算できます（全員に同期）。予定が決まった人は「確定」を押すとロックされ、変更できなくなります。解除はもう一度押して確認。前泊＝11/6→11/7、後泊＝11/7→11/8。</p>
+  </section>
+
+  <textarea id="copybox" readonly hidden aria-label="コピー用テキスト"></textarea>
+
+  <section id="reset-card">
+    <button class="btn plain" id="reset" type="button">すべてリセット</button>
+  </section>
+  <section class="panel confirm" id="confirm" hidden>
+    <p class="confirm-msg">全員分の名前・チェック・金額が<br>初期状態に戻ります。いいですか？</p>
+    <div class="actions">
+      <button class="btn danger" id="reset-yes" type="button">リセット</button>
+      <button class="btn plain" id="reset-no" type="button">やめる</button>
+    </div>
+  </section>
+
+  <div class="sync" id="sync" data-state="loading">読み込み中…</div>
+</div>
+<nav class="dock" aria-label="操作"><button class="btn" id="copy" type="button"><span class="ic" data-icon="letter"></span>LINE用にコピー</button></nav>
+<div class="toast" id="toast" role="status"></div>
+<script>
+(function () {
+  const N = 7;
+  const NAMES = ["soma", "ikkyu", "isei", "aoi", "fuka", "natsuki", "reiya"];
+
+  // ---- pixel people: 16×20 farm-RPG style (dark outline, 3-tone shading) ----
+  const OUT = "#2b1b14";
+  function sh(hex, a) {
+    const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255];
+    return "#" + c.map((v) => Math.max(0, Math.min(255, Math.round(a > 0 ? v + (255 - v) * a : v * (1 + a)))).toString(16).padStart(2, "0")).join("");
+  }
+  const sp = (a, b) => { const r = []; for (let i = a; i <= b; i++) r.push(i); return r; };
+  // hair shapes: { back: [[y, xs]...], front: [[y, xs]...], curly }
+  const STYLES = {
+    short: { front: [[1, sp(5, 10)], [2, sp(4, 11)], [3, sp(3, 12)], [4, [3,4,5,6,7,8,10,11,12]], [5, [3,4,11,12]], [6, [3,12]]] },
+    curlyShort: { curly: true, front: [[1, [4,5,7,8,10,11]], [2, sp(3, 12)], [3, sp(3, 12)], [4, sp(3, 12)], [5, [3,4,6,7,9,11,12]], [6, [3,12]]] },
+    bob: { front: [[1, sp(5, 10)], [2, sp(4, 11)], [3, sp(3, 12)], [4, sp(2, 13)], [5, sp(2, 13)],
+      [6, [2,3,12,13]], [7, [2,3,12,13]], [8, [2,3,12,13]], [9, [2,3,12,13]], [10, [2,3,4,11,12,13]]] },
+    // isei: same wispy bangs on top, fuka-style curly bob below — but shorter (ends above the chin)
+    layeredBob: { curlyFrom: 6, front: [[1, sp(5, 10)], [2, sp(4, 11)], [3, sp(3, 12)], [4, sp(3, 12)], [5, [3,4,5,7,8,10,11,12]],
+      [6, [2,3,4,11,12,13]], [7, [1,2,3,12,13,14]], [8, [2,3,4,11,12,13]], [9, [3,12]]] },
+    blondeShort: { front: [[1, sp(5, 10)], [2, sp(4, 11)], [3, sp(3, 12)], [4, sp(3, 12)], [5, [3,4,5,6,7,12]], [6, [3,4,5,12]], [7, [3,12]], [8, [3,12]]] },
+    curlyBob: { curly: true, front: [[1, [4,5,7,8,10,11]], [2, sp(3, 12)], [3, sp(2, 13)], [4, sp(2, 13)], [5, [2,3,4,6,7,9,11,12,13]],
+      [6, [2,3,12,13]], [7, [1,2,3,12,13,14]], [8, [2,3,12,13]], [9, [1,2,3,12,13,14]], [10, [2,3,4,11,12,13]], [11, [3,12]]] },
+    long: { back: sp(4, 15).map((y) => [y, sp(2, 13)]),
+      front: [[1, sp(5, 10)], [2, sp(4, 11)], [3, sp(3, 12)], [4, [3,4,5,6,9,10,11,12]], [5, [3,4,11,12]],
+        [6, [3,12]], [7, [3,12]], [8, [3,12]], [9, [3,12]], [10, [3,12]]] },
+    longCurly: { curly: true, back: sp(4, 10).map((y) => [y, sp(2, 13)]).concat([[11, [1,2,3,12,13,14]], [12, [2,13]]]),
+      front: [[1, [4,5,7,8,10,11]], [2, sp(3, 12)], [3, sp(2, 13)], [4, sp(2, 13)], [5, [2,3,4,6,9,11,12,13]],
+        [6, [2,3,12,13]], [7, [1,2,3,12,13,14]], [8, [2,3,12,13]], [9, [1,2,3,12,13,14]], [10, [2,3,12,13]]] },
+  };
+  const LOOKS = [
+    { style: "short",       hair: "#4a2f22", top: "#4f7fd1", f: false, accent: null },      // soma
+    { style: "curlyShort",  hair: "#2c2230", top: "#e07c34", f: false, accent: null },      // ikkyu
+    { style: "layeredBob",  hair: "#6b4128", tips: "#dcae74", top: "#3a3a46", f: true,  accent: null },      // isei: brown, light ends
+    { style: "blondeShort", hair: "#f0c75a", top: "#4fb39a", f: true,  accent: "#ff7fa8" }, // aoi
+    { style: "curlyBob",    hair: "#6e4128", top: "#a77ad6", f: true,  accent: null },      // fuka
+    { style: "long",        hair: "#46291f", top: "#f0b93e", f: true,  accent: "#e85d5d" }, // natsuki
+    { style: "longCurly",   hair: "#2e2420", top: "#5f9440", f: false, accent: null, beard: true },      // reiya
+  ];
+  function person(L) {
+    const W = 16, Hh = 20, g = Array.from({ length: Hh }, () => Array(W).fill(null));
+    const set = (x, y, c) => { if (x >= 1 && x < W - 1 && y >= 1 && y < Hh - 1) g[y][x] = c; };
+    const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, c); };
+    const St = STYLES[L.style], H = L.hair, HAIR = "H";
+    const Hl = sh(H, L.style === "blondeShort" ? .45 : .3), Hd = sh(H, -.4);
+    const S = "#f6d0ae", Sd = "#e0a682", B = L.top, Bl = sh(B, .28), Bd = sh(B, -.3);
+    if (St.back) St.back.forEach(([y, xs]) => xs.forEach((x) => set(x, y, HAIR)));
+    // body
+    if (L.f) { rect(4, 11, 11, 14, B); rect(3, 15, 12, 15, B); rect(5, 16, 6, 17, S); rect(9, 16, 10, 17, S); set(11, 15, Bd); set(12, 15, Bd); }
+    else { rect(4, 11, 11, 15, B); rect(5, 16, 10, 17, "#4b5070"); set(7, 17, null); set(8, 17, null); set(10, 16, "#3a3e58"); set(10, 17, "#3a3e58"); }
+    rect(3, 12, 3, 13, B); rect(12, 12, 12, 13, Bd); set(3, 14, S); set(12, 14, Sd);
+    for (let y = 11; y <= 14; y++) set(11, y, Bd);
+    set(4, 12, Bl); set(4, 13, Bl); set(5, 12, Bl);
+    set(7, 11, S); set(8, 11, S);
+    if (!L.f) { set(6, 15, Bd); set(9, 15, Bd); }   // belt hint
+    rect(5, 18, 6, 18, "#5c3624"); rect(9, 18, 10, 18, "#5c3624");
+    // head
+    rect(4, 3, 11, 10, S); set(4, 10, null); set(11, 10, null); set(3, 7, S); set(12, 7, Sd);
+    for (let y = 5; y <= 9; y++) set(11, y, Sd);
+    rect(6, 7, 6, 8, "#2a1a14"); rect(9, 7, 9, 8, "#2a1a14");
+    set(5, 9, "#f2a09a"); set(10, 9, "#f2a09a");
+    set(7, 9, "#cf7a68"); set(8, 9, "#cf7a68");
+    if (L.beard) {   // full beard: sideburns, mustache, chin
+      const bd = sh(H, .12);
+      [[4, 9], [11, 9], [7, 9], [8, 9], [5, 10], [6, 10], [9, 10], [10, 10], [6, 11], [7, 11], [8, 11], [9, 11], [4, 8], [11, 8]].forEach(([x, y]) => set(x, y, bd));
+      set(7, 10, "#b8604f"); set(8, 10, "#b8604f");
+    }
+    // front hair
+    St.front.forEach(([y, xs]) => xs.forEach((x) => set(x, y, HAIR)));
+    // hair shading
+    const isH = (x, y) => g[y] && g[y][x] === HAIR;
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+      if (!isH(x, y)) continue;
+      const tip = L.tips && y >= 8;
+      const h0 = tip ? L.tips : H, hl = tip ? sh(L.tips, .3) : Hl, hd = tip ? sh(L.tips, -.25) : Hd;
+      let c = h0;
+      if (St.curly || (St.curlyFrom && y >= St.curlyFrom)) { const k = (x * 3 + y * 2) % 5; c = k === 0 ? hl : k === 2 ? hd : h0; }
+      else if (!isH(x, y - 1) && x <= 7) c = hl;
+      else if (L.tips && y === 7) c = sh(H, .25);   // blend into the light ends
+      if (x >= 12 || (!isH(x, y + 1) && g[y + 1] && g[y + 1][x] && g[y + 1][x] !== HAIR && y > 6)) c = c === hl ? h0 : hd;
+      g[y][x] = c;
+    }
+    if (St.strands) St.strands.forEach(([x, y]) => { if (g[y][x]) g[y][x] = sh(L.tips && y >= 8 ? L.tips : H, -.3); });
+    // soft shadow on skin under the hairline
+    for (let y = 1; y < Hh; y++) for (let x = 0; x < W; x++) {
+      if (g[y][x] === S && g[y - 1][x] && ![S, Sd, OUT].includes(g[y - 1][x]) && y <= 6) g[y][x] = Sd;
+    }
+    if (L.accent) { if (L.style === "long") { set(10, 3, L.accent); set(11, 3, L.accent); } else set(11, 4, L.accent); }
+    // outline
+    const out = g.map((r) => r.slice());
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+      if (g[y][x]) continue;
+      if ((g[y - 1] && g[y - 1][x]) || (g[y + 1] && g[y + 1][x]) || g[y][x - 1] || g[y][x + 1]) out[y][x] = OUT;
+    }
+    let rects = "";
+    out.forEach((row, y) => row.forEach((c, x) => { if (c) rects += '<rect x="' + x + '" y="' + y + '" width="1.02" height="1.02" fill="' + c + '"/>'; }));
+    return '<svg class="px" viewBox="0 0 16 20" aria-hidden="true">' + rects + "</svg>";
+  }
+  const sprites = LOOKS.map(person);
+
+  // ---- small pixel icons ----
+  const ICONS = {
+    coin:  { p: { o: "#5b2a0e", y: "#f4c430", l: "#fff1a0", d: "#c98a12" }, m: [
+      "...oooo...", "..oyyyyo..", ".oylyyydo.", "oylyyyyydo", "oyyyddyydo", "oyyyddyydo", "oyyyyyyydo", ".oyyyyydo.", "..oddddo..", "...oooo..."] },
+    moon1: { p: { o: "#1d2a55", y: "#3e7fd8", l: "#9cc4ff" }, m: [
+      "...ooo....", "..oyyo....", ".oyyo.....", "oyyo......", "oylo......", "oylo......", "oyyo....o.", ".oyyooooy.", "..oyyyyyo.", "...ooooo.."] },
+    moon2: { p: { o: "#5b2a0e", y: "#e8792b", l: "#ffc28a" }, m: [
+      "...ooo....", "..oyyo....", ".oyyo.....", "oyyo......", "oylo......", "oylo......", "oyyo....o.", ".oyyooooy.", "..oyyyyyo.", "...ooooo.."] },
+    bag:   { p: { o: "#5b2a0e", y: "#c98a4a", l: "#e9b27a", d: "#8a5a35" }, m: [
+      "...oooo...", "....oo....", "...oyyo...", "..oylyyo..", ".oylyyyyo.", "oyyyyyyydo", "oyyyyyyydo", "oyyyyyyydo", ".oddddddo.", "..oooooo.."] },
+    flag:  { p: { o: "#3a1c55", y: "#8b5cf6", l: "#c4a6ff", s: "#5b2a0e" }, m: [
+      ".s........", ".sooooo...", ".sylyyyo..", ".syyyyyyo.", ".syyyyyo..", ".sooooo...", ".s........", ".s........", ".s........", "sss......."] },
+    lockOn:  { p: { o: "#5b2a0e", y: "#f4c430", l: "#fff1a0", d: "#c98a12", s: "#8a8f9e" }, m: [
+      "...oooo...", "..os..so..", "..os..so..", ".oooooooo.", ".oyllyyyo.", ".oyyooyyo.", ".oyyooyyo.", ".oyyyyyyo.", ".oddddddo.", ".oooooooo."] },
+    lockOff: { p: { o: "#5b2a0e", y: "#e9bd72", l: "#fff0c8", d: "#c98a4a", s: "#8a8f9e" }, m: [
+      "...oooo...", "..os..so..", "......so..", ".oooooooo.", ".oyllyyyo.", ".oyyooyyo.", ".oyyooyyo.", ".oyyyyyyo.", ".oddddddo.", ".oooooooo."] },
+    letter:{ p: { o: "#5b2a0e", y: "#fff0c8", d: "#e9bd72", r: "#c9392f" }, m: [
+      "..........", "oooooooooo", "oyoyyyyoyo", "oyyoyyoyyo", "oyyyrryyyo", "oyyyrryyyo", "oyyyyyyyyo", "oddddddddo", "oooooooooo", ".........."] },
+  };
+  function icon(name) {
+    const I = ICONS[name]; let r = "";
+    I.m.forEach((row, y) => row.split("").forEach((c, x) => { if (I.p[c]) r += '<rect x="' + x + '" y="' + y + '" width="1.02" height="1.02" fill="' + I.p[c] + '"/>'; }));
+    return '<svg class="px" viewBox="0 0 10 10" width="100%" height="100%" aria-hidden="true">' + r + "</svg>";
+  }
+  document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
+  function hop(el) { if (!el) return; el.classList.remove("hop"); void el.offsetWidth; el.classList.add("hop"); }
+  const fresh = () => ({
+    total: 51102,
+    people: Array.from({ length: N }, (_, i) => ({ name: NAMES[i], n1: i !== 1, n2: true, locked: false })),
+  });
+  let state = fresh();
+  let editSeq = 0;      // bumps on every local edit; stale poll results are ignored
+  let loaded = false;
+  const $ = (id) => document.getElementById(id);
+  const yen = (v) => "¥" + Math.round(v).toLocaleString("ja-JP");
+  const fmt = (v) => v == null ? "" : v.toLocaleString("ja-JP");
+
+  // Apps Script web app URL (…/exec). The page talks to it with fetch, so no Google login is involved.
+  const API = "https://script.google.com/macros/s/AKfycbyB4SD_UrYljK99Mrt3zsQg_pluJEIsCgztJTYZZYPHU0bxs3nAPcno3D4Gg_ZoXJl9/exec";
+  const hasServer = /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(API);
+  async function call(fn, ...args) {
+    if (!hasServer) throw new Error("no server");
+    const res = fn === "getState"
+      ? await fetch(API + "?action=get&t=" + Date.now(), { cache: "no-store" })
+      : await fetch(API, { method: "POST", body: JSON.stringify({ action: fn, args }) });   // text/plain → no CORS preflight
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "server error");
+    return data.state;
+  }
+  function apply(s) {
+    if (!s || !Array.isArray(s.people)) return;
+    state = { total: s.total, people: s.people };
+    loaded = true; render(); setSync("ok");
+  }
+  function send(fn, ...args) {
+    const seq = ++editSeq;
+    setSync("saving");
+    call(fn, ...args).then((s) => { if (seq === editSeq) apply(s); else setSync("ok"); })
+      .catch(() => setSync("error"));
+  }
+  function poll() {
+    const seq = editSeq;
+    call("getState").then((s) => { if (seq === editSeq) apply(s); }).catch(() => setSync("error"));
+  }
+  function setSync(k) {
+    const el = $("sync");
+    el.dataset.state = k;
+    el.textContent = k === "saving" ? "保存中…" : k === "error" ? (hasServer ? "接続できません。再試行中…" : "プレビュー表示（保存されません）") : loaded ? "全員と同期済み" : "読み込み中…";
+  }
+
+  const list = $("list");
+  state.people.forEach((p, i) => {
+    const el = document.createElement("div");
+    el.className = "row";
+    el.innerHTML =
+      '<div class="ava" id="ava-' + i + '">' + sprites[i] + '</div>' +
+      '<div class="who"><input id="name-' + i + '" aria-label="名前" maxlength="20" enterkeyhint="done"><small id="sub-' + i + '"></small></div>' +
+      '<div class="pay"><span class="ic">' + icon("coin") + '</span><span id="amt-' + i + '">—</span></div>' +
+      '<div class="pills">' +
+        '<label class="tg n1"><input type="checkbox" id="n1-' + i + '"><span class="tick"></span>前泊 <em>11/6</em></label>' +
+        '<label class="tg n2"><input type="checkbox" id="n2-' + i + '"><span class="tick"></span>後泊 <em>11/7</em></label>' +
+        '<button class="lock" type="button" id="lock-' + i + '"></button>' +
+      '</div>';
+    list.appendChild(el);
+    const nm = $("name-" + i);
+    nm.addEventListener("input", () => { editSeq++; });
+    nm.addEventListener("keydown", (e) => { if (e.key === "Enter") nm.blur(); });
+    nm.addEventListener("change", () => {
+      const v = nm.value.trim() || NAMES[i];
+      nm.value = v;
+      if (v === state.people[i].name) return;
+      state.people[i].name = v; render(); send("updatePerson", i, { name: v });
+    });
+    ["n1", "n2"].forEach((n) => $(n + "-" + i).addEventListener("change", (e) => {
+      state.people[i][n] = e.target.checked; render();
+      hop($("ava-" + i)); hop($("fig-" + i));
+      send("updatePerson", i, { [n]: e.target.checked });
+    }));
+    const lk = $("lock-" + i);
+    let armTimer;
+    lk.addEventListener("click", () => {
+      const p = state.people[i];
+      if (!p.locked) { p.locked = true; lk.classList.remove("arm"); render(); hop($("fig-" + i)); send("setLock", i, true); toast(p.name + " を確定しました"); return; }
+      if (!lk.classList.contains("arm")) {          // first tap on a locked row: ask
+        lk.classList.add("arm"); renderLock(i);
+        clearTimeout(armTimer); armTimer = setTimeout(() => { lk.classList.remove("arm"); renderLock(i); }, 3000);
+        return;
+      }
+      clearTimeout(armTimer); lk.classList.remove("arm");
+      p.locked = false; render(); send("setLock", i, false); toast(p.name + " のロックを解除しました");
+    });
+  });
+
+  const lineup = $("lineup");
+  state.people.forEach((p, i) => {
+    const f = document.createElement("div");
+    f.className = "fig"; f.id = "fig-" + i;
+    f.innerHTML = sprites[i] + '<div class="nights"><i></i><i></i></div><span></span>';
+    lineup.appendChild(f);
+  });
+
+  const totalEl = $("total");
+  let totalTimer;
+  totalEl.addEventListener("input", () => {
+    const digits = totalEl.value.replace(/[^\d]/g, "");
+    state.total = digits ? Number(digits) : null;
+    totalEl.value = fmt(state.total);
+    editSeq++; render();
+    clearTimeout(totalTimer);
+    totalTimer = setTimeout(() => send("setTotal", state.total), 700);
+  });
+
+  function calc() {
+    const c1 = state.people.filter((p) => p.n1).length;
+    const c2 = state.people.filter((p) => p.n2).length;
+    const shares = c1 + c2;
+    const per = state.total != null && shares ? state.total / shares : null;
+    const rows = state.people.map((p) => {
+      const k = (p.n1 ? 1 : 0) + (p.n2 ? 1 : 0);
+      return { k, amount: per == null ? null : Math.round(per * k) };
+    });
+    return { c1, c2, shares, per, rows };
+  }
+  const nightsLabel = (p) => p.n1 && p.n2 ? "2泊" : p.n1 ? "前泊のみ" : p.n2 ? "後泊のみ" : "宿泊なし";
+
+  function renderLock(i) {
+    const lk = $("lock-" + i), on = !!state.people[i].locked, arm = lk.classList.contains("arm");
+    lk.classList.toggle("on", on && !arm);
+    lk.innerHTML = '<span class="ic">' + icon(on ? "lockOn" : "lockOff") + "</span>" + (arm ? "解除？" : on ? "確定" : "確定する");
+    lk.setAttribute("aria-label", arm ? "もう一度押すとロック解除" : on ? "確定済み（押すと解除）" : "確定してロックする");
+  }
+  function render() {
+    const { c1, c2, shares, per, rows } = calc();
+    $("c1").innerHTML = c1 + "<u>名</u>";
+    $("c2").innerHTML = c2 + "<u>名</u>";
+    $("shares").innerHTML = shares + "<u>口</u>";
+    $("locked").innerHTML = state.people.filter((p) => p.locked).length + "<u>/7名</u>";
+    $("per").textContent = per == null ? "—" : yen(per);
+    if (document.activeElement !== totalEl) totalEl.value = fmt(state.total);
+    let sum = 0;
+    state.people.forEach((p, i) => {
+      const nm = $("name-" + i);
+      if (document.activeElement !== nm) nm.value = p.name;
+      $("n1-" + i).checked = p.n1;
+      $("n2-" + i).checked = p.n2;
+      $("n1-" + i).disabled = $("n2-" + i).disabled = !!p.locked;
+      nm.closest(".row").classList.toggle("locked", !!p.locked);
+      $("fig-" + i).classList.toggle("locked", !!p.locked);
+      renderLock(i);
+      const r = rows[i];
+      nm.closest(".row").classList.toggle("off", r.k === 0);
+      const fig = $("fig-" + i);
+      fig.classList.toggle("off", r.k === 0);
+      fig.querySelector("span").textContent = p.name;
+      const ns = fig.querySelectorAll(".nights i");
+      ns[0].className = p.n1 ? "on1" : ""; ns[1].className = p.n2 ? "on2" : "";
+      $("amt-" + i).style.opacity = r.amount == null && r.k ? ".55" : "";
+      $("amt-" + i).textContent = r.k === 0 ? "¥0" : r.amount == null ? "未定" : yen(r.amount);
+      $("sub-" + i).innerHTML = (p.locked ? '<b class="on">確定</b>' : '<b class="off">仮</b>') + nightsLabel(p) + (r.k ? " · " + r.k + "口" : "");
+      if (r.amount != null) sum += r.amount;
+    });
+    ["n1", "n2"].forEach((n, j) => {
+      const box = $("cal" + (j + 1));
+      const who = state.people.map((p, i) => p[n] ? i : -1).filter((i) => i >= 0);
+      const key = who.map((i) => i + (state.people[i].locked ? "L" : "")).join(",");
+      if (box.dataset.key === key) return;
+      box.dataset.key = key;
+      box.innerHTML = who.length ? who.map((i) => state.people[i].locked ? sprites[i] : sprites[i].replace('class="px"', 'class="px t"')).join("") : '<span class="empty">だれもいない</span>';
+    });
+    $("sum").textContent = per == null ? "未定" : yen(sum);
+    const d = per == null ? 0 : sum - state.total;
+    $("diff").textContent = d ? "（端数 " + (d > 0 ? "+" : "") + d + "円）" : "";
+  }
+
+  function summary() {
+    const { shares, per, rows } = calc();
+    const lines = ["【宿泊費精算】11/6〜11/8"];
+    lines.push(per == null ? "合計金額：未定" : "合計 " + yen(state.total) + " ÷ " + shares + "口 ＝ 1口 " + yen(per));
+    lines.push("");
+    state.people.forEach((p, i) => {
+      const r = rows[i];
+      lines.push((p.locked ? "✅ " : "⬜ ") + p.name + "（" + nightsLabel(p) + (p.locked ? "・確定" : "・仮") + "）" + (r.k === 0 ? "¥0" : r.amount == null ? "未定" : yen(r.amount)));
+    });
+    return lines.join("\n");
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+  }
+
+  $("copy").addEventListener("click", () => {
+    const text = summary();
+    const box = $("copybox");
+    const fallback = () => { box.value = text; box.hidden = false; box.focus(); box.select(); toast("テキストを選択してコピーしてください"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { box.hidden = true; toast("コピーしました"); }, fallback);
+    } else fallback();
+  });
+
+  $("reset").addEventListener("click", () => { $("reset-card").hidden = true; $("confirm").hidden = false; });
+  $("reset-no").addEventListener("click", () => { $("confirm").hidden = true; $("reset-card").hidden = false; });
+  $("reset-yes").addEventListener("click", () => {
+    state = fresh(); $("confirm").hidden = true; $("reset-card").hidden = false; $("copybox").hidden = true; render();
+    send("resetAll"); toast("リセットしました");
+  });
+
+  render(); setSync("loading");
+  if (hasServer) {
+    poll();
+    setInterval(() => { if (!document.hidden) poll(); }, 5000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+  } else setSync("error");
+})();
+</script>
+</body>
+</html>
